@@ -1,0 +1,466 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── 認証・ユーザー ───────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String?
+  displayName   String?
+  firstName     String?
+  lastName      String?
+  phoneNumber   String?
+  birthDate     DateTime? @db.Timestamptz
+  gender        String?
+  avatarUrl     String?
+  status        String    @default("active") // active / banned
+  createdAt     DateTime  @default(now()) @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @db.Timestamptz
+  deletedAt     DateTime? @db.Timestamptz
+
+  socialAccounts      SocialAccount[]
+  refreshTokens       RefreshToken[]
+  favorites           Favorite[]
+  recentlyViewed      RecentlyViewedActivity[]
+  bookings            Booking[]
+  reviews             Review[]
+  notificationPrefs   NotificationPreference[]
+  devices             Device[]
+
+  @@map("users")
+}
+
+model SocialAccount {
+  id              String   @id @default(cuid())
+  userId          String
+  provider        String   // google / yahoo_japan / facebook / line
+  providerUserId  String
+  providerEmail   String?
+  createdAt       DateTime @default(now()) @db.Timestamptz
+  updatedAt       DateTime @updatedAt @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([provider, providerUserId])
+  @@map("social_accounts")
+}
+
+model RefreshToken {
+  id          String    @id @default(cuid())
+  userId      String
+  tokenHash   String    @unique
+  deviceId    String?
+  deviceName  String?
+  expiresAt   DateTime  @db.Timestamptz
+  revokedAt   DateTime? @db.Timestamptz
+  createdAt   DateTime  @default(now()) @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("refresh_tokens")
+}
+
+// ─── エリア・カテゴリ ──────────────────────────────────────────
+
+model Area {
+  id          String  @id @default(cuid())
+  parentId    String?
+  name        String
+  slug        String  @unique
+  regionType  String? // domestic / overseas
+  countryCode String?
+  latitude    Float?
+  longitude   Float?
+  imageUrl    String?
+  sortOrder   Int     @default(0)
+  isActive    Boolean @default(true)
+
+  parent     Area?        @relation("AreaHierarchy", fields: [parentId], references: [id])
+  children   Area[]       @relation("AreaHierarchy")
+  activities Activity[]
+  userAreas  UserArea[]
+
+  @@map("areas")
+}
+
+model Category {
+  id         String     @id @default(cuid())
+  parentId   String?
+  name       String
+  slug       String     @unique
+  imageUrl   String?
+  sortOrder  Int        @default(0)
+  isActive   Boolean    @default(true)
+
+  parent     Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children   Category[] @relation("CategoryHierarchy")
+  activities Activity[]
+
+  @@map("categories")
+}
+
+// ─── アクティビティ ────────────────────────────────────────────
+
+model Activity {
+  id               String    @id @default(cuid())
+  categoryId       String
+  areaId           String
+  title            String
+  slug             String    @unique
+  shortDescription String?
+  description      String?
+  highlights       String[]  // PostgreSQL array
+  status           String    @default("published") // draft / published / suspended / archived
+  minPrice         Int       @default(0)
+  maxPrice         Int       @default(0)
+  currency         String    @default("JPY")
+  averageRating    Float     @default(0)
+  reviewCount      Int       @default(0)
+  bookingCount     Int       @default(0)
+  publishedAt      DateTime? @db.Timestamptz
+  createdAt        DateTime  @default(now()) @db.Timestamptz
+  updatedAt        DateTime  @updatedAt @db.Timestamptz
+
+  category         Category          @relation(fields: [categoryId], references: [id])
+  area             Area              @relation(fields: [areaId], references: [id])
+  images           ActivityImage[]
+  plans            Plan[]
+  favorites        Favorite[]
+  recentlyViewed   RecentlyViewedActivity[]
+  reviews          Review[]
+
+  @@map("activities")
+}
+
+model ActivityImage {
+  id          String  @id @default(cuid())
+  activityId  String
+  url         String
+  imageType   String  @default("gallery") // main / gallery / map / plan / review
+  altText     String?
+  sortOrder   Int     @default(0)
+
+  activity Activity @relation(fields: [activityId], references: [id])
+
+  @@map("activity_images")
+}
+
+// ─── プラン ────────────────────────────────────────────────────
+
+model Plan {
+  id                     String   @id @default(cuid())
+  activityId             String
+  name                   String
+  description            String?
+  durationMinutes        Int?
+  minParticipants        Int      @default(1)
+  maxParticipants        Int?
+  status                 String   @default("active") // active / suspended
+  bookingDeadlineMinutes Int?
+  createdAt              DateTime @default(now()) @db.Timestamptz
+  updatedAt              DateTime @updatedAt @db.Timestamptz
+
+  activity           Activity           @relation(fields: [activityId], references: [id])
+  prices             PlanPrice[]
+  schedules          PlanSchedule[]
+  meetingPoints      MeetingPoint[]
+  availabilitySlots  AvailabilitySlot[]
+  bookingItems       BookingItem[]
+  bookingQuotes      BookingQuote[]
+
+  @@map("plans")
+}
+
+model PlanPrice {
+  id              String    @id @default(cuid())
+  planId          String
+  participantType String    // adult / child / infant / senior
+  amount          Int
+  currency        String    @default("JPY")
+  validFrom       DateTime? @db.Timestamptz
+  validTo         DateTime? @db.Timestamptz
+
+  plan Plan @relation(fields: [planId], references: [id])
+
+  @@map("plan_prices")
+}
+
+model PlanSchedule {
+  id              String  @id @default(cuid())
+  planId          String
+  sequence        Int
+  startTime       String?
+  durationMinutes Int?
+  title           String
+  description     String?
+  locationName    String?
+  latitude        Float?
+  longitude       Float?
+  mapUrl          String?
+  isOptional      Boolean @default(false)
+
+  plan Plan @relation(fields: [planId], references: [id])
+
+  @@map("plan_schedules")
+}
+
+model MeetingPoint {
+  id                 String  @id @default(cuid())
+  planId             String
+  name               String
+  address            String?
+  latitude           Float?
+  longitude          Float?
+  description        String?
+  accessInformation  String?
+  meetingTime        String?
+  isDefault          Boolean @default(false)
+
+  plan          Plan          @relation(fields: [planId], references: [id])
+  bookingQuotes BookingQuote[]
+  bookingItems  BookingItem[]
+
+  @@map("meeting_points")
+}
+
+// ─── 在庫 ──────────────────────────────────────────────────────
+
+model AvailabilitySlot {
+  id                String    @id @default(cuid())
+  planId            String
+  serviceDate       DateTime  @db.Date
+  startTime         String?
+  endTime           String?
+  capacity          Int
+  reservedQuantity  Int       @default(0)
+  heldQuantity      Int       @default(0)
+  status            String    @default("available") // available / limited / sold_out / not_operating / closed
+  priceSnapshot     Json?
+  bookingDeadlineAt DateTime? @db.Timestamptz
+  createdAt         DateTime  @default(now()) @db.Timestamptz
+  updatedAt         DateTime  @updatedAt @db.Timestamptz
+
+  plan         Plan          @relation(fields: [planId], references: [id])
+  bookingItems BookingItem[]
+
+  @@unique([planId, serviceDate])
+  @@map("availability_slots")
+}
+
+// ─── 予約 ──────────────────────────────────────────────────────
+
+model BookingQuote {
+  id             String   @id @default(cuid())
+  planId         String
+  meetingPointId String?
+  serviceDate    DateTime @db.Date
+  participants   Json     // { adult: 2, child: 1 }
+  subtotal       Int
+  tax            Int      @default(0)
+  total          Int
+  currency       String   @default("JPY")
+  expiresAt      DateTime @db.Timestamptz
+  createdAt      DateTime @default(now()) @db.Timestamptz
+
+  plan         Plan          @relation(fields: [planId], references: [id])
+  meetingPoint MeetingPoint? @relation(fields: [meetingPointId], references: [id])
+  booking      Booking?
+
+  @@map("booking_quotes")
+}
+
+model Booking {
+  id              String    @id @default(cuid())
+  userId          String
+  quoteId         String    @unique
+  bookingNumber   String    @unique
+  status          String    @default("confirmed") // pending / confirmed / completed / cancel_requested / cancelled / failed / expired
+  serviceDate     DateTime  @db.Date
+  totalAmount     Int
+  currency        String    @default("JPY")
+  idempotencyKey  String?   @unique
+  cancelledAt     DateTime? @db.Timestamptz
+  createdAt       DateTime  @default(now()) @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @db.Timestamptz
+
+  user         User          @relation(fields: [userId], references: [id])
+  quote        BookingQuote  @relation(fields: [quoteId], references: [id])
+  items        BookingItem[]
+  participants BookingParticipant[]
+  payment      Payment?
+  review       Review?
+
+  @@map("bookings")
+}
+
+model BookingItem {
+  id               String  @id @default(cuid())
+  bookingId        String
+  planId           String
+  availabilitySlotId String
+  meetingPointId   String?
+  planNameSnapshot String  // 予約時点の名称コピー
+  unitPrice        Int     // 予約時点の価格コピー
+  quantity         Int
+  subtotal         Int
+  currency         String  @default("JPY")
+
+  booking          Booking          @relation(fields: [bookingId], references: [id])
+  plan             Plan             @relation(fields: [planId], references: [id])
+  availabilitySlot AvailabilitySlot @relation(fields: [availabilitySlotId], references: [id])
+  meetingPoint     MeetingPoint?    @relation(fields: [meetingPointId], references: [id])
+
+  @@map("booking_items")
+}
+
+model BookingParticipant {
+  id              String @id @default(cuid())
+  bookingId       String
+  participantType String // adult / child / infant
+  quantity        Int
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+
+  @@map("booking_participants")
+}
+
+// ─── 決済 ──────────────────────────────────────────────────────
+
+model Payment {
+  id               String    @id @default(cuid())
+  bookingId        String    @unique
+  userId           String
+  amount           Int
+  currency         String    @default("JPY")
+  status           String    @default("pending") // pending / authorized / paid / failed / refunded
+  provider         String?
+  providerPaymentId String?
+  idempotencyKey   String?   @unique
+  paidAt           DateTime? @db.Timestamptz
+  refundedAt       DateTime? @db.Timestamptz
+  createdAt        DateTime  @default(now()) @db.Timestamptz
+  updatedAt        DateTime  @updatedAt @db.Timestamptz
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+
+  @@map("payments")
+}
+
+// ─── お気に入り・閲覧履歴 ─────────────────────────────────────
+
+model Favorite {
+  id         String   @id @default(cuid())
+  userId     String
+  activityId String
+  createdAt  DateTime @default(now()) @db.Timestamptz
+
+  user     User     @relation(fields: [userId], references: [id])
+  activity Activity @relation(fields: [activityId], references: [id])
+
+  @@unique([userId, activityId])
+  @@map("favorites")
+}
+
+model RecentlyViewedActivity {
+  id          String   @id @default(cuid())
+  userId      String?
+  anonymousId String?
+  activityId  String
+  source      String?
+  viewedAt    DateTime @default(now()) @db.Timestamptz
+
+  user     User?    @relation(fields: [userId], references: [id])
+  activity Activity @relation(fields: [activityId], references: [id])
+
+  @@map("recently_viewed_activities")
+}
+
+// ─── レビュー ──────────────────────────────────────────────────
+
+model Review {
+  id                  String    @id @default(cuid())
+  userId              String
+  bookingId           String    @unique
+  activityId          String
+  rating              Int       // 1-5
+  title               String?
+  body                String?
+  status              String    @default("published") // draft / pending_moderation / published / rejected / hidden
+  isVerifiedPurchase  Boolean   @default(true)
+  publishedAt         DateTime? @db.Timestamptz
+  createdAt           DateTime  @default(now()) @db.Timestamptz
+  updatedAt           DateTime  @updatedAt @db.Timestamptz
+  deletedAt           DateTime? @db.Timestamptz
+
+  user     User     @relation(fields: [userId], references: [id])
+  booking  Booking  @relation(fields: [bookingId], references: [id])
+  activity Activity @relation(fields: [activityId], references: [id])
+  photos   ReviewPhoto[]
+
+  @@map("reviews")
+}
+
+model ReviewPhoto {
+  id               String  @id @default(cuid())
+  reviewId         String
+  url              String
+  thumbnailUrl     String?
+  sortOrder        Int     @default(0)
+  moderationStatus String  @default("approved") // pending / approved / rejected
+
+  review Review @relation(fields: [reviewId], references: [id])
+
+  @@map("review_photos")
+}
+
+// ─── 通知・デバイス ────────────────────────────────────────────
+
+model NotificationPreference {
+  id        String   @id @default(cuid())
+  userId    String
+  channel   String   // email / push
+  category  String   // booking / payment / campaign / review / nearby
+  enabled   Boolean  @default(true)
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, channel, category])
+  @@map("notification_preferences")
+}
+
+model Device {
+  id         String    @id @default(cuid())
+  userId     String
+  deviceId   String    @unique
+  platform   String    // ios / android
+  pushToken  String?
+  appVersion String?
+  osVersion  String?
+  lastSeenAt DateTime  @default(now()) @db.Timestamptz
+  revokedAt  DateTime? @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("devices")
+}
+
+// ─── マイエリア ────────────────────────────────────────────────
+
+model UserArea {
+  userId    String
+  areaId    String
+  priority  Int      @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  area Area @relation(fields: [areaId], references: [id])
+
+  @@id([userId, areaId])
+  @@map("user_areas")
+}
