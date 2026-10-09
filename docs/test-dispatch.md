@@ -1,0 +1,3 @@
+# repository_dispatch test
+
+travel_apiからarchitecture_studyへ通知するテストです。
