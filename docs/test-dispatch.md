@@ -1,3 +1,3 @@
-# repository_dispatch test
+# OpenAPI update test
 
 travel_apiからarchitecture_studyへ通知するテストです。
