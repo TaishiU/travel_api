@@ -1,0 +1,23 @@
+name: Notify repository of architecture_study
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "**/*.md"
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send repository dispatch
+        env:
+          GH_TOKEN: ${{ secrets.REPOSITORY_DISPATCH_TOKEN }}
+        run: |
+          gh api \
+            --method POST \
+            "/repos/TaishiU/architecture_study/dispatches" \
+            -f event_type="repository-a-updated" \
+            -f client_payload[message]="repository A updated"
