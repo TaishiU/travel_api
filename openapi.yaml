@@ -1,26 +1,14 @@
 openapi: 3.0.3
 info:
   title: travel-api
-  version: 1.0.0
-  description: 旅行予約アプリ RESTful API
+  version: 0.2.0
 
 servers:
   - url: http://localhost:3000/v1
-    description: ローカル開発
-
-tags:
-  - name: Health
-  - name: Auth
-  - name: Areas
-  - name: Categories
-  - name: Activities
-  - name: Plans
 
 paths:
-
   /health:
     get:
-      tags: [Health]
       summary: ヘルスチェック
       operationId: getHealth
       responses:
@@ -37,8 +25,7 @@ paths:
 
   /auth/register:
     post:
-      tags: [Auth]
-      summary: 新規登録
+      summary: 新規ユーザー登録
       operationId: register
       requestBody:
         required: true
@@ -56,6 +43,8 @@ paths:
                   minLength: 8
                 displayName:
                   type: string
+                  minLength: 1
+                  maxLength: 50
       responses:
         '201':
           description: 登録成功
@@ -66,14 +55,14 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/TokenResponse'
-        '400':
-          description: バリデーションエラー
+        '409':
+          description: メールアドレス重複
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-        '409':
-          description: メールアドレス重複
+        '422':
+          description: バリデーションエラー
           content:
             application/json:
               schema:
@@ -81,7 +70,6 @@ paths:
 
   /auth/login:
     post:
-      tags: [Auth]
       summary: ログイン
       operationId: login
       requestBody:
@@ -116,8 +104,7 @@ paths:
 
   /auth/refresh:
     post:
-      tags: [Auth]
-      summary: アクセストークン更新
+      summary: アクセストークン再発行
       operationId: refreshToken
       requestBody:
         required: true
@@ -131,16 +118,14 @@ paths:
                   type: string
       responses:
         '200':
-          description: 更新成功
+          description: トークン再発行成功
           content:
             application/json:
               schema:
                 type: object
-                required: [data]
                 properties:
                   data:
                     type: object
-                    required: [accessToken, refreshToken]
                     properties:
                       accessToken:
                         type: string
@@ -155,7 +140,6 @@ paths:
 
   /auth/logout:
     post:
-      tags: [Auth]
       summary: ログアウト
       operationId: logout
       requestBody:
@@ -170,18 +154,17 @@ paths:
                   type: string
       responses:
         '204':
-          description: ログアウト成功（No Content）
+          description: ログアウト成功
 
   /auth/me:
     get:
-      tags: [Auth]
-      summary: ログイン中ユーザー取得
+      summary: ログインユーザー取得
       operationId: getMe
       security:
         - BearerAuth: []
       responses:
         '200':
-          description: OK
+          description: ユーザー情報
           content:
             application/json:
               schema:
@@ -196,208 +179,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /areas:
-    get:
-      tags: [Areas]
-      summary: エリア一覧（子エリア含む）
-      operationId: getAreas
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Area'
-
-  /categories:
-    get:
-      tags: [Categories]
-      summary: カテゴリ一覧（子カテゴリ含む）
-      operationId: getCategories
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Category'
-
-  /activities:
-    get:
-      tags: [Activities]
-      summary: アクティビティ一覧・検索
-      operationId: getActivities
-      parameters:
-        - name: keyword
-          in: query
-          description: タイトル・説明文をキーワード検索
-          schema:
-            type: string
-        - name: area_id
-          in: query
-          schema:
-            type: string
-        - name: category_id
-          in: query
-          schema:
-            type: string
-        - name: available_date
-          in: query
-          description: 指定日に空きがあるアクティビティのみ返す（YYYY-MM-DD）
-          schema:
-            type: string
-            format: date
-            example: '2026-10-15'
-        - name: min_price
-          in: query
-          schema:
-            type: integer
-            minimum: 0
-        - name: max_price
-          in: query
-          schema:
-            type: integer
-            minimum: 0
-        - name: sort
-          in: query
-          schema:
-            type: string
-            enum: [popular, price_asc, price_desc, rating, newest]
-            default: popular
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 20
-        - name: cursor
-          in: query
-          description: カーソルページング用（前レスポンスの pagination.nextCursor を渡す）
-          schema:
-            type: string
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [data, pagination]
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ActivitySummary'
-                  pagination:
-                    $ref: '#/components/schemas/Pagination'
-        '400':
-          description: クエリパラメータ不正
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /activities/{activityId}:
-    get:
-      tags: [Activities]
-      summary: アクティビティ詳細
-      description: 認証済みの場合 favorite.isFavorite を付与する。
-      operationId: getActivityById
-      security:
-        - {}
-        - BearerAuth: []
-      parameters:
-        - name: activityId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    $ref: '#/components/schemas/ActivityDetail'
-        '404':
-          description: 見つからない
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /activities/{activityId}/plans:
-    get:
-      tags: [Activities]
-      summary: アクティビティのプラン一覧
-      operationId: getPlansByActivityId
-      parameters:
-        - name: activityId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/PlanWithMeetingPoints'
-        '404':
-          description: アクティビティが見つからない
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /plans/{planId}:
-    get:
-      tags: [Plans]
-      summary: プラン詳細
-      operationId: getPlanById
-      parameters:
-        - name: planId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    $ref: '#/components/schemas/PlanDetail'
-        '404':
-          description: 見つからない
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
 components:
   securitySchemes:
     BearerAuth:
@@ -406,36 +187,20 @@ components:
       bearerFormat: JWT
 
   schemas:
-
     Error:
       type: object
-      required: [type, title, status, code, detail]
+      required: [type, title, status]
       properties:
         type:
           type: string
-          example: https://api.example.com/errors/not-found
         title:
           type: string
-          example: Not Found
         status:
           type: integer
-          example: 404
         code:
           type: string
-          example: NOT_FOUND
         detail:
           type: string
-          example: リソースが見つかりません。
-
-    Pagination:
-      type: object
-      required: [nextCursor, hasNext]
-      properties:
-        nextCursor:
-          type: string
-          nullable: true
-        hasNext:
-          type: boolean
 
     User:
       type: object
@@ -443,6 +208,7 @@ components:
       properties:
         id:
           type: string
+          format: uuid
         email:
           type: string
           format: email
@@ -460,313 +226,3 @@ components:
           type: string
         user:
           $ref: '#/components/schemas/User'
-
-    AreaChild:
-      description: 子エリア（children を持たない）
-      type: object
-      required: [id, name, slug, sortOrder, isActive]
-      properties:
-        id:
-          type: string
-        parentId:
-          type: string
-          nullable: true
-        name:
-          type: string
-        slug:
-          type: string
-        regionType:
-          type: string
-          nullable: true
-        countryCode:
-          type: string
-          nullable: true
-        latitude:
-          type: number
-          nullable: true
-        longitude:
-          type: number
-          nullable: true
-        imageUrl:
-          type: string
-          nullable: true
-        sortOrder:
-          type: integer
-        isActive:
-          type: boolean
-
-    Area:
-      description: エリア（children 含む）
-      allOf:
-        - $ref: '#/components/schemas/AreaChild'
-        - type: object
-          properties:
-            children:
-              type: array
-              items:
-                $ref: '#/components/schemas/AreaChild'
-
-    CategoryChild:
-      description: 子カテゴリ（children を持たない）
-      type: object
-      required: [id, name, slug, sortOrder, isActive]
-      properties:
-        id:
-          type: string
-        parentId:
-          type: string
-          nullable: true
-        name:
-          type: string
-        slug:
-          type: string
-        imageUrl:
-          type: string
-          nullable: true
-        sortOrder:
-          type: integer
-        isActive:
-          type: boolean
-
-    Category:
-      description: カテゴリ（children 含む）
-      allOf:
-        - $ref: '#/components/schemas/CategoryChild'
-        - type: object
-          properties:
-            children:
-              type: array
-              items:
-                $ref: '#/components/schemas/CategoryChild'
-
-    ActivityImage:
-      type: object
-      required: [id, url, imageType, sortOrder]
-      properties:
-        id:
-          type: string
-        url:
-          type: string
-        imageType:
-          type: string
-          enum: [main, gallery, map, plan, review]
-        altText:
-          type: string
-          nullable: true
-        sortOrder:
-          type: integer
-
-    PlanPrice:
-      type: object
-      required: [id, participantType, amount, currency]
-      properties:
-        id:
-          type: string
-        participantType:
-          type: string
-          enum: [adult, child, infant, senior]
-        amount:
-          type: integer
-        currency:
-          type: string
-          example: JPY
-
-    MeetingPoint:
-      type: object
-      required: [id, name, isDefault]
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        address:
-          type: string
-          nullable: true
-        latitude:
-          type: number
-          nullable: true
-        longitude:
-          type: number
-          nullable: true
-        description:
-          type: string
-          nullable: true
-        accessInformation:
-          type: string
-          nullable: true
-        meetingTime:
-          type: string
-          nullable: true
-        isDefault:
-          type: boolean
-
-    PlanSchedule:
-      type: object
-      required: [id, sequence, title, isOptional]
-      properties:
-        id:
-          type: string
-        sequence:
-          type: integer
-        startTime:
-          type: string
-          nullable: true
-        durationMinutes:
-          type: integer
-          nullable: true
-        title:
-          type: string
-        description:
-          type: string
-          nullable: true
-        locationName:
-          type: string
-          nullable: true
-        isOptional:
-          type: boolean
-
-    PlanBase:
-      type: object
-      required: [id, activityId, name, status, minParticipants]
-      properties:
-        id:
-          type: string
-        activityId:
-          type: string
-        name:
-          type: string
-        description:
-          type: string
-          nullable: true
-        durationMinutes:
-          type: integer
-          nullable: true
-        minParticipants:
-          type: integer
-        maxParticipants:
-          type: integer
-          nullable: true
-        status:
-          type: string
-          enum: [active, suspended]
-        bookingDeadlineMinutes:
-          type: integer
-          nullable: true
-        prices:
-          type: array
-          items:
-            $ref: '#/components/schemas/PlanPrice'
-
-    PlanWithMeetingPoints:
-      description: プラン一覧で返すプラン（prices + meetingPoints 含む）
-      allOf:
-        - $ref: '#/components/schemas/PlanBase'
-        - type: object
-          properties:
-            meetingPoints:
-              type: array
-              items:
-                $ref: '#/components/schemas/MeetingPoint'
-
-    PlanDetail:
-      description: プラン詳細（schedules + activity 含む）
-      allOf:
-        - $ref: '#/components/schemas/PlanWithMeetingPoints'
-        - type: object
-          properties:
-            schedules:
-              type: array
-              items:
-                $ref: '#/components/schemas/PlanSchedule'
-            activity:
-              type: object
-              properties:
-                id:
-                  type: string
-                title:
-                  type: string
-                slug:
-                  type: string
-                images:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/ActivityImage'
-                  maxItems: 1
-                area:
-                  $ref: '#/components/schemas/AreaChild'
-                category:
-                  $ref: '#/components/schemas/CategoryChild'
-
-    ActivityBase:
-      type: object
-      required: [id, title, slug, status, minPrice, maxPrice, currency, averageRating, reviewCount, bookingCount]
-      properties:
-        id:
-          type: string
-        title:
-          type: string
-        slug:
-          type: string
-        shortDescription:
-          type: string
-          nullable: true
-        status:
-          type: string
-          enum: [draft, published, suspended, archived]
-        minPrice:
-          type: integer
-        maxPrice:
-          type: integer
-        currency:
-          type: string
-          example: JPY
-        averageRating:
-          type: number
-        reviewCount:
-          type: integer
-        bookingCount:
-          type: integer
-        area:
-          $ref: '#/components/schemas/AreaChild'
-        category:
-          $ref: '#/components/schemas/CategoryChild'
-
-    ActivitySummary:
-      description: 一覧取得時のアクティビティ（メイン画像1枚）
-      allOf:
-        - $ref: '#/components/schemas/ActivityBase'
-        - type: object
-          properties:
-            images:
-              type: array
-              items:
-                $ref: '#/components/schemas/ActivityImage'
-              maxItems: 1
-
-    ActivityDetail:
-      description: 詳細取得時のアクティビティ（全画像・プラン・お気に入り状態含む）
-      allOf:
-        - $ref: '#/components/schemas/ActivityBase'
-        - type: object
-          properties:
-            description:
-              type: string
-              nullable: true
-            highlights:
-              type: array
-              items:
-                type: string
-            images:
-              type: array
-              items:
-                $ref: '#/components/schemas/ActivityImage'
-            plans:
-              type: array
-              items:
-                $ref: '#/components/schemas/PlanBase'
-            favorite:
-              type: object
-              required: [isFavorite]
-              properties:
-                isFavorite:
-                  type: boolean

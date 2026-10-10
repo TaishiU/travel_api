@@ -48,6 +48,7 @@ Phase 4 完了済み前提：
 21. [src/routes/activities.ts 更新](#21-srcroutesactivitiests-更新)
 22. [src/routes/bookings.ts 更新](#22-srcroutesbookingsts-更新)
 23. [src/app.ts 更新](#23-appts-更新)
+24. [openapi.yaml 作成](#24-openapiyaml-作成)
 
 ---
 
@@ -974,6 +975,1939 @@ const router = Router();
 router.post('/', optionalAuthenticate, recentlyViewedController.recordView);
 
 export default router;
+```
+
+---
+
+## 24. `openapi.yaml` 作成
+
+Phase 1〜5 で実装した全エンドポイントを網羅する OpenAPI 3.0 仕様書の完成形。  
+Phase 4 の yaml に、お気に入り・レビュー・閲覧履歴・会員情報・ホーム BFF を追加したバージョン。
+
+```yaml
+openapi: 3.0.3
+info:
+  title: travel-api
+  version: 0.5.0
+  description: 旅行予約アプリ RESTful API
+
+servers:
+  - url: http://localhost:3000/v1
+    description: ローカル開発
+
+tags:
+  - name: Health
+  - name: Auth
+  - name: Areas
+  - name: Categories
+  - name: Activities
+  - name: Plans
+  - name: Availability
+  - name: BookingQuotes
+  - name: Bookings
+  - name: Me
+  - name: Favorites
+  - name: Reviews
+  - name: RecentlyViewed
+  - name: Home
+
+paths:
+
+  /health:
+    get:
+      tags: [Health]
+      summary: ヘルスチェック
+      operationId: getHealth
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: 新規登録
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                displayName:
+                  type: string
+      responses:
+        '201':
+          description: 登録成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/TokenResponse'
+        '400':
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: メールアドレス重複
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: ログイン
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: ログイン成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: 認証失敗
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: アクセストークン更新
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [accessToken, refreshToken]
+                    properties:
+                      accessToken:
+                        type: string
+                      refreshToken:
+                        type: string
+        '401':
+          description: リフレッシュトークン無効
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: ログアウト
+      operationId: logout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '204':
+          description: ログアウト成功（No Content）
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: ログイン中ユーザー取得（auth 専用 / 簡易レスポンス）
+      operationId: getAuthMe
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/User'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /areas:
+    get:
+      tags: [Areas]
+      summary: エリア一覧（子エリア含む）
+      operationId: getAreas
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Area'
+
+  /categories:
+    get:
+      tags: [Categories]
+      summary: カテゴリ一覧（子カテゴリ含む）
+      operationId: getCategories
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Category'
+
+  /activities:
+    get:
+      tags: [Activities]
+      summary: アクティビティ一覧・検索
+      operationId: getActivities
+      parameters:
+        - name: keyword
+          in: query
+          schema:
+            type: string
+        - name: area_id
+          in: query
+          schema:
+            type: string
+        - name: category_id
+          in: query
+          schema:
+            type: string
+        - name: available_date
+          in: query
+          description: 指定日に空きがあるアクティビティのみ（YYYY-MM-DD）
+          schema:
+            type: string
+            format: date
+        - name: min_price
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+        - name: max_price
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [popular, price_asc, price_desc, rating, newest]
+            default: popular
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ActivitySummary'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '400':
+          description: クエリパラメータ不正
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /activities/{activityId}:
+    get:
+      tags: [Activities]
+      summary: アクティビティ詳細
+      description: 認証済みの場合 favorite.isFavorite を付与する。
+      operationId: getActivityById
+      security:
+        - {}
+        - BearerAuth: []
+      parameters:
+        - name: activityId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ActivityDetail'
+        '404':
+          description: 見つからない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /activities/{activityId}/plans:
+    get:
+      tags: [Activities]
+      summary: アクティビティのプラン一覧
+      operationId: getPlansByActivityId
+      parameters:
+        - name: activityId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PlanWithMeetingPoints'
+        '404':
+          description: アクティビティが見つからない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /activities/{activityId}/reviews:
+    get:
+      tags: [Reviews]
+      summary: アクティビティのレビュー一覧
+      operationId: getActivityReviews
+      parameters:
+        - name: activityId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Review'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '404':
+          description: アクティビティが見つからない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /plans/{planId}:
+    get:
+      tags: [Plans]
+      summary: プラン詳細
+      operationId: getPlanById
+      parameters:
+        - name: planId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PlanDetail'
+        '404':
+          description: 見つからない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /plans/{planId}/availability:
+    get:
+      tags: [Availability]
+      summary: プランの在庫カレンダー
+      operationId: getAvailability
+      parameters:
+        - name: planId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: from
+          in: query
+          required: true
+          description: 取得開始日（YYYY-MM-DD）
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          description: 取得終了日（YYYY-MM-DD）
+          schema:
+            type: string
+            format: date
+        - name: timezone
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AvailabilitySlot'
+        '400':
+          description: クエリパラメータ不正
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: プランが見つからない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /booking-quotes:
+    post:
+      tags: [BookingQuotes]
+      summary: 予約見積作成（15分間有効）
+      operationId: createQuote
+      security:
+        - {}
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [planId, serviceDate, participants, meetingPointId]
+              properties:
+                planId:
+                  type: string
+                serviceDate:
+                  type: string
+                  format: date
+                participants:
+                  type: object
+                  properties:
+                    adult:
+                      type: integer
+                      minimum: 0
+                      default: 0
+                    child:
+                      type: integer
+                      minimum: 0
+                      default: 0
+                    infant:
+                      type: integer
+                      minimum: 0
+                      default: 0
+                meetingPointId:
+                  type: string
+      responses:
+        '201':
+          description: 見積作成成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/BookingQuoteResponse'
+        '400':
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 在庫不足・催行なし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /booking-quotes/{quoteId}:
+    get:
+      tags: [BookingQuotes]
+      summary: 見積詳細取得
+      operationId: getQuote
+      parameters:
+        - name: quoteId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/BookingQuoteDetail'
+        '404':
+          description: 見積が見つからない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /bookings:
+    post:
+      tags: [Bookings]
+      summary: 予約作成（見積から確定）
+      operationId: createBooking
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 二重予約防止用ユニークキー（UUID 推奨）
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quoteId, paymentMethod]
+              properties:
+                quoteId:
+                  type: string
+                paymentMethod:
+                  type: string
+                  example: credit_card
+      responses:
+        '201':
+          description: 予約確定
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Booking'
+        '400':
+          description: バリデーションエラー / Idempotency-Key なし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 見積期限切れ・使用済み・在庫競合
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      tags: [Bookings]
+      summary: 予約一覧
+      operationId: getBookings
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [upcoming, completed, cancelled]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Booking'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /bookings/{bookingId}:
+    get:
+      tags: [Bookings]
+      summary: 予約詳細
+      operationId: getBookingById
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Booking'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 他ユーザーの予約
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 見つからない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /bookings/{bookingId}/cancel:
+    post:
+      tags: [Bookings]
+      summary: 予約キャンセル
+      operationId: cancelBooking
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: キャンセル成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Booking'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 他ユーザーの予約
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 見つからない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: キャンセル不可ステータス
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /bookings/{bookingId}/reviews:
+    post:
+      tags: [Reviews]
+      summary: レビュー投稿（completed 予約のみ）
+      operationId: createReview
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rating]
+              properties:
+                rating:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                title:
+                  type: string
+                  maxLength: 100
+                body:
+                  type: string
+                  maxLength: 2000
+      responses:
+        '201':
+          description: レビュー投稿成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Review'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 他ユーザーの予約
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 予約が見つからない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 投稿済み
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: completed 以外の予約
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /reviews/latest:
+    get:
+      tags: [Reviews]
+      summary: 最新レビュー一覧
+      operationId: getLatestReviews
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ReviewWithActivity'
+
+  /recently-viewed:
+    post:
+      tags: [RecentlyViewed]
+      summary: 閲覧履歴記録（認証任意）
+      operationId: recordView
+      security:
+        - {}
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [activityId]
+              properties:
+                activityId:
+                  type: string
+                anonymousId:
+                  type: string
+                source:
+                  type: string
+      responses:
+        '204':
+          description: 記録成功（No Content）
+        '404':
+          description: アクティビティが見つからない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /me:
+    get:
+      tags: [Me]
+      summary: 会員情報取得
+      operationId: getMe
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/UserProfile'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    patch:
+      tags: [Me]
+      summary: 会員情報更新
+      operationId: updateMe
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName:
+                  type: string
+                  maxLength: 100
+                phoneNumber:
+                  type: string
+                  maxLength: 20
+                birthDate:
+                  type: string
+                  format: date
+                  example: '1990-01-15'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/UserProfile'
+        '400':
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /me/favorites:
+    get:
+      tags: [Favorites]
+      summary: お気に入り一覧
+      operationId: getFavorites
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FavoriteItem'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags: [Favorites]
+      summary: お気に入り登録
+      operationId: addFavorite
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [activityId]
+              properties:
+                activityId:
+                  type: string
+      responses:
+        '201':
+          description: 登録成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/FavoriteItem'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: アクティビティが見つからない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 登録済み
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /me/favorites/{activityId}:
+    delete:
+      tags: [Favorites]
+      summary: お気に入り削除
+      operationId: removeFavorite
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: activityId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: 削除成功（No Content）
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: お気に入りが見つからない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /me/recently-viewed:
+    get:
+      tags: [RecentlyViewed]
+      summary: 閲覧履歴一覧
+      operationId: getRecentlyViewed
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RecentlyViewedItem'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /home:
+    get:
+      tags: [Home]
+      summary: ホーム画面 BFF（popular + recently_viewed）
+      description: 認証済みの場合 recently_viewed セクションを追加する。
+      operationId: getHome
+      security:
+        - {}
+        - BearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/HomeData'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+
+    Error:
+      type: object
+      required: [type, title, status, code, detail]
+      properties:
+        type:
+          type: string
+          example: https://api.example.com/errors/not-found
+        title:
+          type: string
+          example: Not Found
+        status:
+          type: integer
+          example: 404
+        code:
+          type: string
+          example: NOT_FOUND
+        detail:
+          type: string
+          example: リソースが見つかりません。
+
+    Pagination:
+      type: object
+      required: [nextCursor, hasNext]
+      properties:
+        nextCursor:
+          type: string
+          nullable: true
+        hasNext:
+          type: boolean
+
+    User:
+      type: object
+      required: [id, email]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+          nullable: true
+
+    TokenResponse:
+      type: object
+      required: [accessToken, refreshToken, user]
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+
+    UserProfile:
+      description: 会員プロフィール（passwordHash 除く）
+      type: object
+      required: [id, email, status, createdAt]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+          nullable: true
+        firstName:
+          type: string
+          nullable: true
+        lastName:
+          type: string
+          nullable: true
+        phoneNumber:
+          type: string
+          nullable: true
+        birthDate:
+          type: string
+          format: date
+          nullable: true
+        gender:
+          type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [active, suspended, deleted]
+        createdAt:
+          type: string
+          format: date-time
+
+    AreaChild:
+      description: 子エリア（children を持たない）
+      type: object
+      required: [id, name, slug, sortOrder, isActive]
+      properties:
+        id:
+          type: string
+        parentId:
+          type: string
+          nullable: true
+        name:
+          type: string
+        slug:
+          type: string
+        regionType:
+          type: string
+          nullable: true
+        countryCode:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+        imageUrl:
+          type: string
+          nullable: true
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+
+    Area:
+      description: エリア（children 含む）
+      allOf:
+        - $ref: '#/components/schemas/AreaChild'
+        - type: object
+          properties:
+            children:
+              type: array
+              items:
+                $ref: '#/components/schemas/AreaChild'
+
+    CategoryChild:
+      description: 子カテゴリ（children を持たない）
+      type: object
+      required: [id, name, slug, sortOrder, isActive]
+      properties:
+        id:
+          type: string
+        parentId:
+          type: string
+          nullable: true
+        name:
+          type: string
+        slug:
+          type: string
+        imageUrl:
+          type: string
+          nullable: true
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+
+    Category:
+      description: カテゴリ（children 含む）
+      allOf:
+        - $ref: '#/components/schemas/CategoryChild'
+        - type: object
+          properties:
+            children:
+              type: array
+              items:
+                $ref: '#/components/schemas/CategoryChild'
+
+    ActivityImage:
+      type: object
+      required: [id, url, imageType, sortOrder]
+      properties:
+        id:
+          type: string
+        url:
+          type: string
+        imageType:
+          type: string
+          enum: [main, gallery, map, plan, review]
+        altText:
+          type: string
+          nullable: true
+        sortOrder:
+          type: integer
+
+    PlanPrice:
+      type: object
+      required: [id, participantType, amount, currency]
+      properties:
+        id:
+          type: string
+        participantType:
+          type: string
+          enum: [adult, child, infant, senior]
+        amount:
+          type: integer
+        currency:
+          type: string
+          example: JPY
+
+    MeetingPoint:
+      type: object
+      required: [id, name, isDefault]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        address:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        accessInformation:
+          type: string
+          nullable: true
+        meetingTime:
+          type: string
+          nullable: true
+        isDefault:
+          type: boolean
+
+    PlanSchedule:
+      type: object
+      required: [id, sequence, title, isOptional]
+      properties:
+        id:
+          type: string
+        sequence:
+          type: integer
+        startTime:
+          type: string
+          nullable: true
+        durationMinutes:
+          type: integer
+          nullable: true
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        locationName:
+          type: string
+          nullable: true
+        isOptional:
+          type: boolean
+
+    PlanBase:
+      type: object
+      required: [id, activityId, name, status, minParticipants]
+      properties:
+        id:
+          type: string
+        activityId:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        durationMinutes:
+          type: integer
+          nullable: true
+        minParticipants:
+          type: integer
+        maxParticipants:
+          type: integer
+          nullable: true
+        status:
+          type: string
+          enum: [active, suspended]
+        bookingDeadlineMinutes:
+          type: integer
+          nullable: true
+        prices:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanPrice'
+
+    PlanWithMeetingPoints:
+      description: プラン一覧で返すプラン（prices + meetingPoints 含む）
+      allOf:
+        - $ref: '#/components/schemas/PlanBase'
+        - type: object
+          properties:
+            meetingPoints:
+              type: array
+              items:
+                $ref: '#/components/schemas/MeetingPoint'
+
+    PlanDetail:
+      description: プラン詳細（schedules + activity 含む）
+      allOf:
+        - $ref: '#/components/schemas/PlanWithMeetingPoints'
+        - type: object
+          properties:
+            schedules:
+              type: array
+              items:
+                $ref: '#/components/schemas/PlanSchedule'
+            activity:
+              type: object
+              properties:
+                id:
+                  type: string
+                title:
+                  type: string
+                slug:
+                  type: string
+                images:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ActivityImage'
+                  maxItems: 1
+                area:
+                  $ref: '#/components/schemas/AreaChild'
+                category:
+                  $ref: '#/components/schemas/CategoryChild'
+
+    ActivityBase:
+      type: object
+      required: [id, title, slug, status, minPrice, maxPrice, currency, averageRating, reviewCount, bookingCount]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        slug:
+          type: string
+        shortDescription:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [draft, published, suspended, archived]
+        minPrice:
+          type: integer
+        maxPrice:
+          type: integer
+        currency:
+          type: string
+          example: JPY
+        averageRating:
+          type: number
+        reviewCount:
+          type: integer
+        bookingCount:
+          type: integer
+        area:
+          $ref: '#/components/schemas/AreaChild'
+        category:
+          $ref: '#/components/schemas/CategoryChild'
+
+    ActivitySummary:
+      description: 一覧取得時のアクティビティ（メイン画像1枚）
+      allOf:
+        - $ref: '#/components/schemas/ActivityBase'
+        - type: object
+          properties:
+            images:
+              type: array
+              items:
+                $ref: '#/components/schemas/ActivityImage'
+              maxItems: 1
+
+    ActivityDetail:
+      description: 詳細取得時のアクティビティ（全画像・プラン・お気に入り状態含む）
+      allOf:
+        - $ref: '#/components/schemas/ActivityBase'
+        - type: object
+          properties:
+            description:
+              type: string
+              nullable: true
+            highlights:
+              type: array
+              items:
+                type: string
+            images:
+              type: array
+              items:
+                $ref: '#/components/schemas/ActivityImage'
+            plans:
+              type: array
+              items:
+                $ref: '#/components/schemas/PlanBase'
+            favorite:
+              type: object
+              required: [isFavorite]
+              properties:
+                isFavorite:
+                  type: boolean
+
+    AvailabilitySlot:
+      type: object
+      required: [serviceDate, capacity, remaining, status]
+      properties:
+        serviceDate:
+          type: string
+          format: date
+          example: '2026-10-15'
+        startTime:
+          type: string
+          nullable: true
+          example: '09:00'
+        endTime:
+          type: string
+          nullable: true
+          example: '12:00'
+        capacity:
+          type: integer
+        remaining:
+          type: integer
+        status:
+          type: string
+          enum: [available, limited, sold_out, not_operating, closed]
+
+    BookingQuoteResponse:
+      type: object
+      required: [quoteId, planId, serviceDate, participants, totalAmount, currency, expiresAt]
+      properties:
+        quoteId:
+          type: string
+        planId:
+          type: string
+        serviceDate:
+          type: string
+          format: date
+        participants:
+          type: object
+          properties:
+            adult:
+              type: integer
+            child:
+              type: integer
+            infant:
+              type: integer
+        totalAmount:
+          type: integer
+        currency:
+          type: string
+          example: JPY
+        expiresAt:
+          type: string
+          format: date-time
+
+    BookingQuoteDetail:
+      description: 見積詳細（プラン情報含む）
+      allOf:
+        - $ref: '#/components/schemas/BookingQuoteResponse'
+        - type: object
+          properties:
+            plan:
+              type: object
+              properties:
+                id:
+                  type: string
+                name:
+                  type: string
+                prices:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/PlanPrice'
+                activity:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    title:
+                      type: string
+                    images:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/ActivityImage'
+                      maxItems: 1
+
+    BookingItem:
+      type: object
+      required: [id, planId, quantity, subtotal, currency]
+      properties:
+        id:
+          type: string
+        planId:
+          type: string
+        availabilitySlotId:
+          type: string
+        meetingPointId:
+          type: string
+          nullable: true
+        planNameSnapshot:
+          type: string
+        unitPrice:
+          type: integer
+        quantity:
+          type: integer
+        subtotal:
+          type: integer
+        currency:
+          type: string
+
+    Payment:
+      type: object
+      required: [id, amount, currency, status, provider]
+      properties:
+        id:
+          type: string
+        amount:
+          type: integer
+        currency:
+          type: string
+        status:
+          type: string
+          enum: [pending, completed, failed, refunded]
+        provider:
+          type: string
+
+    Booking:
+      type: object
+      required: [id, bookingNumber, status, serviceDate, totalAmount, currency]
+      properties:
+        id:
+          type: string
+        bookingNumber:
+          type: string
+          example: BK-20261008-A3F7K2
+        status:
+          type: string
+          enum: [pending, confirmed, completed, cancelled, cancel_requested, failed, expired]
+        serviceDate:
+          type: string
+          format: date-time
+        totalAmount:
+          type: integer
+        currency:
+          type: string
+          example: JPY
+        cancelledAt:
+          type: string
+          format: date-time
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookingItem'
+        payment:
+          $ref: '#/components/schemas/Payment'
+
+    ReviewUser:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+        displayName:
+          type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+
+    ReviewPhoto:
+      type: object
+      required: [id, url, sortOrder]
+      properties:
+        id:
+          type: string
+        url:
+          type: string
+        sortOrder:
+          type: integer
+
+    Review:
+      type: object
+      required: [id, rating, status, isVerifiedPurchase, createdAt]
+      properties:
+        id:
+          type: string
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        title:
+          type: string
+          nullable: true
+        body:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [published, pending, hidden]
+        isVerifiedPurchase:
+          type: boolean
+        publishedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        user:
+          $ref: '#/components/schemas/ReviewUser'
+        photos:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReviewPhoto'
+
+    ReviewWithActivity:
+      description: 最新レビュー一覧用（activity 情報含む）
+      allOf:
+        - $ref: '#/components/schemas/Review'
+        - type: object
+          properties:
+            activity:
+              type: object
+              properties:
+                id:
+                  type: string
+                title:
+                  type: string
+                slug:
+                  type: string
+                images:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ActivityImage'
+                  maxItems: 1
+
+    FavoriteItem:
+      type: object
+      required: [id, activityId, createdAt]
+      properties:
+        id:
+          type: string
+        activityId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        activity:
+          type: object
+          properties:
+            id:
+              type: string
+            title:
+              type: string
+            slug:
+              type: string
+            minPrice:
+              type: integer
+            maxPrice:
+              type: integer
+            currency:
+              type: string
+            averageRating:
+              type: number
+            reviewCount:
+              type: integer
+            images:
+              type: array
+              items:
+                $ref: '#/components/schemas/ActivityImage'
+              maxItems: 1
+            area:
+              $ref: '#/components/schemas/AreaChild'
+
+    RecentlyViewedItem:
+      type: object
+      required: [id, activityId, viewedAt]
+      properties:
+        id:
+          type: string
+        activityId:
+          type: string
+        viewedAt:
+          type: string
+          format: date-time
+        source:
+          type: string
+          nullable: true
+        activity:
+          type: object
+          properties:
+            id:
+              type: string
+            title:
+              type: string
+            slug:
+              type: string
+            minPrice:
+              type: integer
+            currency:
+              type: string
+            averageRating:
+              type: number
+            images:
+              type: array
+              items:
+                $ref: '#/components/schemas/ActivityImage'
+              maxItems: 1
+
+    HomeActivityItem:
+      description: ホームセクション内のアクティビティ（area は id + name のみ）
+      type: object
+      required: [id, title, slug, minPrice, currency]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        slug:
+          type: string
+        minPrice:
+          type: integer
+        maxPrice:
+          type: integer
+        currency:
+          type: string
+        averageRating:
+          type: number
+        bookingCount:
+          type: integer
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivityImage'
+          maxItems: 1
+        area:
+          type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+
+    HomeSection:
+      type: object
+      required: [type, title, activities]
+      properties:
+        type:
+          type: string
+          enum: [popular, recently_viewed]
+        title:
+          type: string
+        activities:
+          type: array
+          items:
+            $ref: '#/components/schemas/HomeActivityItem'
+
+    HomeData:
+      type: object
+      required: [banners, sections]
+      properties:
+        banners:
+          type: array
+          items:
+            type: object
+        sections:
+          type: array
+          items:
+            $ref: '#/components/schemas/HomeSection'
 ```
 
 ---
